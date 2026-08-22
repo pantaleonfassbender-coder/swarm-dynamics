@@ -9,6 +9,13 @@ export default async (req: Request) => {
       return Response.json({ error: 'Missing fileName or fileData' }, { status: 400 })
     }
 
+    // Ohne Obergrenze laesst sich die Function mit einem grossen base64-Blob
+    // in den Speicher treiben; base64 traegt rund 4/3 der Rohgroesse.
+    const MAX_BYTES = 8 * 1024 * 1024
+    if (typeof fileData !== 'string' || fileData.length > MAX_BYTES * 1.4) {
+      return Response.json({ error: 'That file is larger than 8 MB.' }, { status: 413 })
+    }
+
     const buffer = Buffer.from(fileData, 'base64')
     const ext = fileName.split('.').pop()?.toLowerCase()
 
@@ -46,4 +53,6 @@ export default async (req: Request) => {
 export const config = {
   path: '/api/parse-document',
   method: 'POST',
+  // Dokumentenextraktion ist teuer und der Endpunkt steht offen im Netz.
+  rateLimit: { windowSize: 60, windowLimit: 10, aggregateBy: ['ip', 'domain'] },
 }
