@@ -1,7 +1,7 @@
 # SwarmDynamics
 
 An agent-based opinion model. Hundreds of agents — up to a few thousand — change their minds only through local encounters on a social network. Consensus, polarisation and fragmentation are **outcomes of the run**, not assertions of a language model.
-Genuine swarm behaviour comes from **local rules on a topology**. So the dynamics moved into the browser, and the language model was moved to the two places where it is actually good:
+Genuine swarm behaviour comes from **local rules on a topology**:
 
 | | Before | Now |
 |---|---|---|
@@ -45,8 +45,6 @@ The repulsion is not decoration. Without it almost every population converges to
 
 **Topology decides more than most personality parameters.** On a scale-free network a few hubs reach everyone and a single voice can turn a run; on a small world the same population holds its clusters for far longer.
 
----
-
 ## What the numbers mean
 
 Two measurement decisions are exposed, because both changed the headline during development:
@@ -54,22 +52,6 @@ Two measurement decisions are exposed, because both changed the headline during 
 **Cluster tolerance is derived.** How many opinion groups you count depends on how close two opinions must be to count as one. A fixed tolerance of 0.12 reported *one* group — "consensus" — for a population that had actually split into seventeen, because those groups sat 0.03 apart. The tolerance now follows the population's own confidence radii and is displayed with the result.
 
 **The verdict does not come from the cluster count.** A population 42 % in favour and 42 % opposed was labelled "Consensus" because its opinions filled the whole range *without a gap*, and single-linkage clustering sees that as one group. The headline contradicted the histogram directly beneath it. `Shape` and `polarisation` are now computed from the distribution: two substantial opposing camps are polarisation, whatever the linkage says.
-
----
-
-## Code review of the previous version
-
-Findings, most consequential first:
-
-1. **The link attachment was a lie.** `handleAddLink` stored the URL string itself as the attachment's content. The prompt then said "context attached via link" and supplied the URL — so the model talked about a page it had never seen. Removed; only files whose text is actually extracted can be attached now.
-2. **No rate limiting** on either endpoint. Five model calls per run, open to the internet. Both endpoints now carry an edge limit.
-3. **No size limit** on `parse-document`: an arbitrary base64 blob went straight into `Buffer.from` and `pdf-parse`. Capped at 8 MB, checked before decoding.
-4. **The retry loop retried everything**, including 400s that could never succeed — three attempts with exponential backoff to reach the same error.
-5. **Tailwind from the CDN in production.** The CDN build says itself it is not for production, and it disclosed every visitor's IP to a third party. Now built locally; the site makes no external requests at all.
-6. **No reproducibility.** Nothing was seeded, so no run could be repeated, shown or contested.
-7. **Sentiment was authored, not measured.** The model assigned each message a sentiment score and those scores were then averaged into an "analytics" figure — a number that looks measured and is not.
-
----
 
 ## Four ways of asking, beyond the single run
 
@@ -102,17 +84,6 @@ The graph drawn with a force layout, colour by opinion, node size by degree, and
 Deliberately absent. The fitter would be quick to write; the data is not. Without a documented case whose course is known, it would fit parameters to invented numbers and return something that looks like a measurement and is not.
 
 ---
-
-## Two bugs the tests caught, both silent
-
-Recorded because neither would have announced itself:
-
-**A NaN parameter disabled the dynamics instead of failing.** The chunked sweep called `sweep()` with `points: 1`, and the axis value divided by `points - 1` — zero. The resulting `NaN` passed straight through `clamp()`, and in the step function every comparison against `NaN` is false, so no agent ever moved toward another. The sweep quietly computed a *different model* and reported its numbers as findings. Fixed at both ends: the division is guarded, and a non-finite faction parameter now throws.
-
-**The verdict contradicted the histogram.** Described above under *What the numbers mean* — worth repeating that both of these produced plausible output. Nothing crashed; the screen just said something untrue.
-
----
-
 ## Running it
 
 ```bash
