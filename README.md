@@ -49,9 +49,9 @@ The repulsion is not decoration. Without it almost every population converges to
 
 ## What the numbers mean
 
-Two measurement decisions are exposed rather than buried, because both changed the headline during development:
+Two measurement decisions are exposed, because both changed the headline during development:
 
-**Cluster tolerance is derived, not fixed.** How many opinion groups you count depends on how close two opinions must be to count as one. A fixed tolerance of 0.12 reported *one* group — "consensus" — for a population that had actually split into seventeen, because those groups sat 0.03 apart. The tolerance now follows the population's own confidence radii and is displayed with the result.
+**Cluster tolerance is derived.** How many opinion groups you count depends on how close two opinions must be to count as one. A fixed tolerance of 0.12 reported *one* group — "consensus" — for a population that had actually split into seventeen, because those groups sat 0.03 apart. The tolerance now follows the population's own confidence radii and is displayed with the result.
 
 **The verdict does not come from the cluster count.** A population 42 % in favour and 42 % opposed was labelled "Consensus" because its opinions filled the whole range *without a gap*, and single-linkage clustering sees that as one group. The headline contradicted the histogram directly beneath it. `shape` and `polarisation` are now computed from the distribution: two substantial opposing camps are polarisation, whatever the linkage says.
 
