@@ -20,12 +20,42 @@
 import type { Config, Context } from "@netlify/functions"
 
 const MODEL = env("SWARM_MODEL") || "claude-sonnet-4-6"
-const FALLBACK = ["claude-sonnet-4-5", "claude-3-7-sonnet-latest"]
 const MAX_SCENARIO = 12_000
+
+/* Zeitbudget. Der Grund fuer die 504, die diese Seite geliefert hat: drei
+   Versuche zu je 22 s ergeben 66 s, und die Funktion wird vorher abgeraeumt.
+   Ein Abbruch durch die Plattform ist eine HTML-Seite ohne "error"-Feld — im
+   Browser stand deshalb nur "The model endpoint answered 504", also gerade
+   nicht, was fehlte. Jetzt gilt EIN Budget fuer den ganzen Aufruf, und jeder
+   Versuch bekommt nur, was davon uebrig ist. Die Funktion antwortet lieber
+   selbst mit einem Satz, als sich abschneiden zu lassen. */
+const BUDGET = clamp(Number(env("SWARM_TIMEOUT_MS")) || 45_000, 10_000, 55_000)
+const RESERVE = 1_500   // Antwort bauen und senden
+const MIN_TRY = 6_000   // darunter faengt kein Modell mehr sinnvoll an
+
+/* Gemessen ueber das AI Gateway mit genau den Prompts unten: Sonnet braucht
+   fuer eine Deutung rund 20 s, Haiku rund 11 s. `needs` ist der schlechte Fall,
+   nicht der Mittelwert — ein Szenario darf bis 12 000 Zeichen lang sein.
+   claude-3-7-sonnet-latest stand hier als letzter Ausweg und kennt das Gateway
+   nicht: es beantwortet den Aufruf mit einer HTML-Fehlerseite und HTTP 200. */
+const CHAIN = dedupe([
+  { model: MODEL, needs: 30_000 },
+  { model: "claude-sonnet-4-5", needs: 26_000 },
+  { model: "claude-haiku-4-5", needs: 15_000 },
+])
 
 function env(key: string): string | undefined {
   const g = globalThis as any
   return g.Netlify?.env?.get(key) ?? g.process?.env?.[key]
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo
+}
+
+function dedupe<T extends { model: string }>(chain: T[]): T[] {
+  const seen = new Set<string>()
+  return chain.filter(c => { if (seen.has(c.model)) return false; seen.add(c.model); return true })
 }
 
 /* Die Parameter, die das Modell setzen darf, sind genau die des Modells in
@@ -118,8 +148,20 @@ export default async (req: Request, _ctx: Context) => {
     user = `SCENARIO\n${scenario}\n\nPOPULATION AS CONFIGURED\n${factions}\n\nSIMULATION PARAMETERS\n${params}\n\nMEASURED RESULT\n${result}\n\nInterpret this run.`
   }
 
-  let last = ""
-  for (const model of [MODEL, ...FALLBACK]) {
+  const started = Date.now()
+  const leftMs = () => BUDGET - (Date.now() - started)
+
+  let last = "", ranOut = false
+  for (let i = 0; i < CHAIN.length; i++) {
+    const { model, needs } = CHAIN[i]
+    // Was der schnellste verbleibende Ausweg noch braeuchte, wird nicht
+    // verbraucht: sonst frisst ein haengender erster Versuch das ganze Budget
+    // und die Kette hat nur noch dekorative Glieder.
+    const rest = CHAIN.slice(i + 1)
+    const keepBack = rest.length ? Math.min(...rest.map(c => c.needs)) : 0
+    const cap = Math.min(needs, leftMs() - RESERVE - keepBack)
+    if (cap < MIN_TRY) { ranOut = true; continue }
+
     try {
       const r = await fetch(`${base}/v1/messages`, {
         method: "POST",
@@ -132,9 +174,13 @@ export default async (req: Request, _ctx: Context) => {
           model, max_tokens: 2000, temperature: 0.4,
           system, messages: [{ role: "user", content: user }],
         }),
-        signal: AbortSignal.timeout(22_000),
+        signal: AbortSignal.timeout(cap),
       })
-      if (!r.ok) { last = `${model}: HTTP ${r.status}`; continue }
+      // Ein Modell, das das Gateway nicht kennt, kommt als HTML mit Status 200
+      // zurueck. Ungeprueft parst das nicht und liest sich dann wie ein
+      // Modellfehler, obwohl der Name schlicht falsch ist.
+      const kind = r.headers.get("content-type") ?? ""
+      if (!r.ok || !kind.includes("json")) { last = `${model}: ${await why(r)}`; continue }
       const data = await r.json()
       const finish = data?.stop_reason
       const text = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim()
@@ -146,10 +192,34 @@ export default async (req: Request, _ctx: Context) => {
       if (!parsed) { last = `${model}: answer was not valid JSON`; continue }
       return json({ ...parsed, model })
     } catch (e: any) {
-      last = `${model}: ${e?.message ?? e}`
+      const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError"
+      if (timedOut) ranOut = true
+      last = timedOut ? `${model}: no answer within ${Math.round(cap / 1000)} s` : `${model}: ${e?.message ?? e}`
     }
   }
+
+  // 504 mit einem lesbaren Satz statt der Fehlerseite der Plattform: das
+  // Ergebnis der Simulation steht bereits im Browser, es fehlt nur die Deutung.
+  if (ranOut) {
+    return json({
+      error: `The model did not answer within the ${Math.round(BUDGET / 1000)} s this endpoint allows. ` +
+             `The run itself is unaffected — the simulation and every measurement on this page were computed ` +
+             `in your browser. Try again, or shorten the scenario text. (Last: ${last})`,
+    }, 504)
+  }
   return json({ error: `No model in the chain answered. Last: ${last}` }, 502)
+}
+
+/* Der Provider begruendet Fehler im Rumpf — 429 vs. unbekanntes Modell vs.
+   fehlendes Guthaben sind drei verschiedene Handlungen fuer den Betreiber. */
+async function why(r: Response): Promise<string> {
+  let detail = ""
+  try {
+    const body = (await r.text()).slice(0, 300)
+    const msg = JSON.parse(body)?.error?.message
+    detail = msg ? `: ${msg}` : body.startsWith("<") ? ": endpoint returned a web page, not the API" : ""
+  } catch { /* Rumpf unlesbar; der Status allein muss reichen */ }
+  return `HTTP ${r.status}${detail}`
 }
 
 /* Modelle liefern trotz klarer Anweisung gelegentlich Code-Zaeune oder einen

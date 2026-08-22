@@ -100,7 +100,9 @@ Deployment is Netlify: `npm run build`, publish `dist`, functions from `netlify/
 
 ### Environment
 
-No API key of your own is needed: Netlify's **AI Gateway** injects `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL`. Optional: `SWARM_MODEL` (default `claude-sonnet-4-6`, with two fallbacks).
+No API key of your own is needed: Netlify's **AI Gateway** injects `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL`. Optional: `SWARM_MODEL` (default `claude-sonnet-4-6`, falling back to `claude-sonnet-4-5` and then `claude-haiku-4-5`) and `SWARM_TIMEOUT_MS` (default 45 000).
+
+`SWARM_TIMEOUT_MS` is one budget for the whole request, not per attempt. A drafted population takes about 14 s and a reading about 20 s over the gateway, so the endpoint has to answer within the platform's limit for a synchronous function; when it cannot, it says so itself rather than being cut off mid-call. Lower the value if the deployment enforces a shorter limit — the endpoint then skips any model too slow to fit and goes straight to the fastest one.
 
 Provider switched from Google Gemini to Anthropic. Both remaining model tasks demand strict JSON against a fixed schema, which is what the switch was for.
 
