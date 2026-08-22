@@ -22,5 +22,11 @@
     "postcss": "^8.4.47",
     "autoprefixer": "^10.4.20"
   },
-  "description": "Agent-based opinion dynamics: hundreds of agents, local encounters on a network, emergent consensus or polarisation."
+  "description": "Agent-based opinion dynamics: hundreds of agents, local encounters on a network, emergent consensus or polarisation.",
+  "license": "MIT",
+  "homepage": "https://swarm-dynamics.netlify.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pantaleonfassbender-coder/swarm-dynamics.git"
+  }
 }

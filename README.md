@@ -1,5 +1,7 @@
 # SwarmDynamics
 
+**Live: <https://swarm-dynamics.netlify.app/>**
+
 An agent-based opinion model. Hundreds of agents — up to a few thousand — change their minds only through local encounters on a social network. Consensus, polarisation and fragmentation are **outcomes of the run**, not assertions of a language model.
 Genuine swarm behaviour comes from **local rules on a topology**:
 
@@ -120,6 +122,16 @@ Provider switched from Google Gemini to Anthropic. Both remaining model tasks de
 - **Not calibrated.** No parameter here was fitted to data about any real audience. A drafted population is a plausible guess.
 - **Seed-sensitive.** Run it several times. If the outcome flips between seeds, that is the answer.
 - **Agents are numbers, not people.** The quotes in the reading illustrate a simulated stance; they are not evidence about anyone.
+
+---
+
+## Licence
+
+[MIT](LICENSE). Use it, change it, teach with it, build on it — keep the copyright notice.
+
+The model itself is not mine to license: bounded confidence is Deffuant and Weisbuch (2000) and
+Hegselmann and Krause (2002), the repulsion term is Jager and Amblard (2005). What is licensed here is
+this implementation of it.
 
 ---
 
