@@ -1,15 +1,6 @@
 # SwarmDynamics
 
 An agent-based opinion model. Hundreds of agents — up to a few thousand — change their minds only through local encounters on a social network. Consensus, polarisation and fragmentation are **outcomes of the run**, not assertions of a language model.
-
----
-
-## What changed, and why it had to
-
-The previous version was not a swarm. Each round, **one** model call wrote the messages of **all five** personas at once, having seen the entire thread. That is a single author speaking five parts: no independent agents, no local neighbourhoods, nothing emerges. The "sentiment shift" it displayed was the model's claim about a conversation it had just written itself.
-
-Scaling that to a hundred agents would not have fixed it. A hundred agents each making their own model call is neither affordable nor more truthful — it is a hundred copies of the same model, still with no mechanism connecting them.
-
 Genuine swarm behaviour comes from **local rules on a topology**. So the dynamics moved into the browser, and the language model was moved to the two places where it is actually good:
 
 | | Before | Now |
