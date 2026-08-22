@@ -9,15 +9,37 @@ import Guide from './guide.jsx';
 
 /* --------------------------------------------------------------- Helfer --- */
 
+/* Der Endpunkt gibt sich selbst eine Frist von 50 s und antwortet danach mit
+   einer Erklaerung. Der Browser wartet etwas laenger — aber nicht unbegrenzt,
+   sonst dreht sich der Spinner bei einem haengenden Netz bis in alle Ewigkeit. */
+const CALL_TIMEOUT_MS = 58_000;
+
 const callModel = async (payload) => {
-  const r = await fetch('/api/model', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let r;
+  try {
+    r = await fetch('/api/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+      throw new Error('The model endpoint did not answer in time. Your run is unaffected — it was '
+        + 'computed here in the browser. Try the request again.');
+    }
+    throw new Error('The model endpoint could not be reached. Your run is unaffected.');
+  }
   const raw = await r.text();
   let data; try { data = JSON.parse(raw); } catch { data = null; }
-  if (!r.ok) throw new Error(data?.error || `The model endpoint answered ${r.status}.`);
+  // Ein 504 ohne Inhalt kommt von der Plattform, nicht vom Endpunkt; dann fehlt
+  // die Erklaerung und der blosse Status waere fuer niemanden brauchbar.
+  if (!r.ok) {
+    throw new Error(data?.error || (r.status === 504
+      ? 'The model endpoint timed out. Your run is unaffected — it was computed here in the browser. '
+        + 'Try the request again.'
+      : `The model endpoint answered ${r.status}.`));
+  }
   return data;
 };
 
