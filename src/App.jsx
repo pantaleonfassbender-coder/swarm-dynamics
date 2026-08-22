@@ -4,6 +4,7 @@ import {
   Users, Network, Sparkles, RotateCcw, Dices, Link2,
 } from 'lucide-react';
 import { run, DEFAULT_FACTIONS } from './swarm.js';
+import { SweepPanel, RobustnessPanel, ComparePanel, NetworkPanel } from './analysis-ui.jsx';
 
 /* --------------------------------------------------------------- Helfer --- */
 
@@ -192,6 +193,7 @@ export default function SwarmDynamics() {
   });
   const set = (k) => (v) => setP(o => ({ ...o, [k]: v }));
 
+  const [tab, setTab] = useState('run');
   const [result, setResult] = useState(null);
   const [reading, setReading] = useState(null);
   const [interpreting, setInterpreting] = useState(false);
@@ -247,7 +249,7 @@ export default function SwarmDynamics() {
   const simulate = () => {
     setErr(''); setReading(null);
     try {
-      setResult(run({ ...p, factions }));
+      setResult(run({ ...p, factions, keepSnapshots: p.n <= 900 }));
     } catch (e) { setErr(`Simulation failed: ${e.message}`); }
   };
 
@@ -263,6 +265,10 @@ export default function SwarmDynamics() {
     setInterpreting(false);
   };
 
+  // Die Analysepanels rechnen denselben Aufbau, nur oefter. Ohne
+  // Momentaufnahmen: sie brauchen nur die Kennzahlen, und tausende
+  // Aufnahmen waeren verschenkter Speicher.
+  const cfg = useMemo(() => ({ ...p, factions }), [p, factions]);
   const f = result?.final;
   const shapeWord = { consensus: 'Consensus', polarised: 'Polarised', fragmented: 'Fragmented', divided: 'Divided' };
 
@@ -398,7 +404,24 @@ export default function SwarmDynamics() {
 
           {/* ---- Rechts: Ergebnis ---- */}
           <div className="xl:col-span-4 space-y-5">
-            {!result ? (
+            <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+              {[['run', 'Result'], ['network', 'Network'], ['sweep', 'Sweep'],
+                ['robust', 'Robustness'], ['compare', 'Compare']].map(([k, l]) => (
+                <button key={k} onClick={() => setTab(k)}
+                  className={`flex-1 px-2 py-1.5 rounded text-xs ${tab === k ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+              ))}
+            </div>
+
+            {tab === 'sweep' ? <SweepPanel base={cfg} />
+             : tab === 'robust' ? <RobustnessPanel base={cfg} />
+             : tab === 'compare' ? <ComparePanel base={cfg} />
+             : tab === 'network' ? (
+               result ? <NetworkPanel result={result} />
+                 : <Panel icon={<Info size={17} className="text-slate-500" />} title="No run yet">
+                     <p className="text-sm text-slate-400">Run the simulation once; the network view draws that run.</p>
+                   </Panel>
+             )
+             : !result ? (
               <Panel icon={<Info size={17} className="text-slate-500" />} title="No run yet">
                 <p className="text-sm text-slate-400">
                   Set the population and press run. The simulation is local and instant — nothing is sent

@@ -80,13 +80,56 @@ Findings, most consequential first:
 
 ---
 
+## Four ways of asking, beyond the single run
+
+A single run is an anecdote: one seed, one parameter choice, one answer. These four panels ask the questions a single run cannot.
+
+### Parameter sweep — where does it tip?
+
+Walks one axis end to end and runs every point several times. The output is a phase diagram: regime shares as coloured bands, median polarisation as a line with its 10–90 % spread, and the **tipping points** marked.
+
+That is the useful number. On the default population, widening the confidence radius tips the outcome from *polarised* to *divided* at ≈ 0.69 and from *divided* to *consensus* at ≈ 0.83. It tells you how far your assumption may be wrong before the conclusion is a different one.
+
+An axis that changes nothing produces no transitions — also a finding, and a reassuring one.
+
+### Seed robustness — does the finding hold?
+
+The same setup over many draws, reporting how often the same regime comes back. Under about 80 % agreement it says so plainly; under 60 % it says the result is about the dice rather than the population.
+
+### Compare an intervention — paired, not independent
+
+Two setups over the **same seeds**, so the difference measures the intervention and not the draw. Five interventions are built in: publish earlier, more reach, engage the critics, recruit advocates, soften the message.
+
+Every measure comes with a **consistency** column: the share of seeds in which the effect went the same way. This matters more than the median. On the default population, *engage the critics* lowers polarisation by a median of −0.11 with 88 % consistency, but moves support by only +0.03 with 63 % consistency — it reliably cools the argument and does not reliably win it. A median alone would have hidden that.
+
+### The network itself
+
+The graph drawn with a force layout, colour by opinion, node size by degree, and a scrubber over the run. On a scale-free topology you can watch a hub turn its neighbourhood — which is the clearest argument for why topology decides more than most personality parameters. Drawn up to 900 agents; above that the picture is a smear and the panel says so instead.
+
+### Not included: calibration against observed cases
+
+Deliberately absent. The fitter would be quick to write; the data is not. Without a documented case whose course is known, it would fit parameters to invented numbers and return something that looks like a measurement and is not.
+
+---
+
+## Two bugs the tests caught, both silent
+
+Recorded because neither would have announced itself:
+
+**A NaN parameter disabled the dynamics instead of failing.** The chunked sweep called `sweep()` with `points: 1`, and the axis value divided by `points - 1` — zero. The resulting `NaN` passed straight through `clamp()`, and in the step function every comparison against `NaN` is false, so no agent ever moved toward another. The sweep quietly computed a *different model* and reported its numbers as findings. Fixed at both ends: the division is guarded, and a non-finite faction parameter now throws.
+
+**The verdict contradicted the histogram.** Described above under *What the numbers mean* — worth repeating that both of these produced plausible output. Nothing crashed; the screen just said something untrue.
+
+---
+
 ## Running it
 
 ```bash
 npm install
 npm run dev            # http://localhost:5173
 npm run build
-node src/swarm.test.mjs   # 26 checks on the engine
+node src/swarm.test.mjs      # 26 checks on the engine
+node src/analysis.test.mjs   # 24 checks on sweep, robustness, compare, layout
 ```
 
 The engine (`src/swarm.js`) is pure functions with no React and no network, which is why it can be tested at all. The tests assert what the model must do: same seed same result, symmetric networks without isolated nodes, scale-free topologies with real hubs, and each of the three regimes following from its parameters.

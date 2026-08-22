@@ -121,6 +121,18 @@ export function buildNetwork(n, kind, params, r) {
  *            Mehrheiten kippen koennen
  */
 export function buildPopulation(n, factions, r) {
+  // Ein nicht endlicher Parameter darf nicht durchrutschen. clamp() reicht
+  // NaN durch, und im Zeitschritt ist jeder Vergleich mit NaN falsch — die
+  // Dynamik faellt dann still aus, statt zu scheitern, und das Ergebnis
+  // sieht aus wie ein Befund.
+  for (const f of factions) {
+    for (const k of ["share", "opinion", "spread", "confidence", "stubbornness", "activity", "zealots"]) {
+      if (f[k] != null && !Number.isFinite(+f[k])) {
+        throw new Error(`Faction "${f.name ?? "?"}" has a non-numeric ${k}.`);
+      }
+    }
+  }
+
   const total = factions.reduce((s, f) => s + (f.share || 0), 0) || 1;
   const agents = [];
   let id = 0;
@@ -304,6 +316,10 @@ export function run(cfg) {
 
   const series = [];
   const events = [];
+  // Momentaufnahmen der Meinungen fuer die Netzansicht. Nur auf Anforderung:
+  // 2000 Agenten ueber 100 Abtastpunkte sind 200.000 Zahlen, die niemand
+  // braucht, der nur die Kennzahlen ansehen will.
+  const snapshots = cfg.keepSnapshots ? [] : null;
   const steps = cfg.steps ?? 120;
   const shockAt = cfg.shockAt ?? 5;
 
@@ -318,10 +334,11 @@ export function run(cfg) {
     if (t > 0) step(state, cfg, r);
     if (t % (cfg.sample ?? 2) === 0 || t === steps) {
       series.push({ t, ...metrics(agents, cfg.clusterTolerance) });
+      if (snapshots) snapshots.push(Float32Array.from(agents, a => a.x));
     }
   }
 
-  return { agents, adj, series, events, final: series[series.length - 1] };
+  return { agents, adj, series, events, snapshots, final: series[series.length - 1] };
 }
 
 /* Voreinstellung: eine plausible Oeffentlichkeit, falls das Sprachmodell nicht
