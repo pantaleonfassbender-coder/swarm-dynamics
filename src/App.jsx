@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { run, DEFAULT_FACTIONS } from './swarm.js';
 import { SweepPanel, RobustnessPanel, ComparePanel, NetworkPanel } from './analysis-ui.jsx';
+import Guide from './guide.jsx';
 
 /* --------------------------------------------------------------- Helfer --- */
 
@@ -287,7 +288,7 @@ export default function SwarmDynamics() {
           </p>
         </div>
         <nav className="flex gap-2">
-          {[['sim', 'Simulator'], ['about', 'About'], ['legal', 'Legal']].map(([k, l]) => (
+          {[['sim', 'Simulator'], ['guide', 'Guide'], ['about', 'About'], ['legal', 'Legal']].map(([k, l]) => (
             <button key={k} onClick={() => setView(k)}
               className={`px-3 py-1.5 rounded-lg text-sm ${view === k ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/50'}`}>{l}</button>
           ))}
@@ -301,7 +302,7 @@ export default function SwarmDynamics() {
         </div>
       )}
 
-      {view === 'about' ? <About /> : view === 'legal' ? <Legal /> : (
+      {view === 'guide' ? <Guide /> : view === 'about' ? <About /> : view === 'legal' ? <Legal /> : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
 
           {/* ---- Links: Szenario und Population ---- */}

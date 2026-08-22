@@ -53,6 +53,14 @@ Two measurement decisions are exposed, because both changed the headline during 
 
 **The verdict does not come from the cluster count.** A population 42 % in favour and 42 % opposed was labelled "Consensus" because its opinions filled the whole range *without a gap*, and single-linkage clustering sees that as one group. The headline contradicted the histogram directly beneath it. `Shape` and `polarisation` are now computed from the distribution: two substantial opposing camps are polarisation, whatever the linkage says.
 
+## A guide for readers without the background
+
+The **Guide** tab explains the mechanism without jargon and documents all twenty parameters: what each
+means, what raising it does, what lowering it does, and where the trap is. It also names the four
+mistakes that are easy to make — believing one run, tuning until the answer is likeable, reading it as a
+forecast, and ignoring how close the tipping point sits to your own assumption — and suggests three
+experiments that show the mechanism rather than describing it.
+
 ## Four ways of asking, beyond the single run
 
 A single run is an anecdote: one seed, one parameter choice, one answer. These four panels ask the questions a single run cannot.
