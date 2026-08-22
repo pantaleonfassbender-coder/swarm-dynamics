@@ -20,8 +20,27 @@
 import type { Config, Context } from "@netlify/functions"
 
 const MODEL = env("SWARM_MODEL") || "claude-sonnet-4-6"
-const FALLBACK = ["claude-sonnet-4-5", "claude-3-7-sonnet-latest"]
+/* Nur Modelle, die das AI Gateway wirklich fuehrt. "claude-3-7-sonnet-latest"
+   stand hier und ist keines: das Gateway beantwortet es mit HTTP 200 und einer
+   HTML-Seite, r.ok ist also wahr und erst r.json() bricht. Der Lauf verlor so
+   einen Versuch und meldete am Ende "answer was not valid JSON" — eine
+   Fehlermeldung, die auf die falsche Faehrte fuehrt. */
+const FALLBACK = ["claude-sonnet-4-5", "claude-haiku-4-5"]
 const MAX_SCENARIO = 12_000
+
+/* Der Grund fuer die 504er. Eine synchrone Netlify-Function wird nach 60 s
+   hart beendet; was dann noch laeuft, sieht der Browser als 504 ohne Inhalt,
+   also ohne die Erklaerung, die dieser Endpunkt sonst sorgfaeltig mitliefert.
+   Vorher bekam jeder Versuch der Kette eigene 22 s, ohne dass jemand die Summe
+   zaehlte — drei Versuche konnten 66 s belegen. Und 22 s waren ohnehin knapp:
+   ein Aufruf braucht gemessen 17-20 s, ein leicht laengerer Lauf lief also in
+   den Abbruch und verbrauchte danach die restliche Kette.
+   Jetzt gilt eine Gesamtfrist. Kein Versuch wird begonnen, der sie reissen
+   koennte, und der Endpunkt antwortet in jedem Fall selbst. */
+const BUDGET_MS  = 50_000   // Gesamtfrist, 10 s Abstand zum Limit der Plattform
+const ATTEMPT_MS = 28_000   // Obergrenze je Versuch: reichlich fuer 17-20 s
+const MIN_TRY_MS = 6_000    // darunter lohnt kein Versuch mehr
+const RESERVE_MS = 1_500    // fuer das Zusammenbauen der Antwort
 
 function env(key: string): string | undefined {
   const g = globalThis as any
@@ -118,8 +137,20 @@ export default async (req: Request, _ctx: Context) => {
     user = `SCENARIO\n${scenario}\n\nPOPULATION AS CONFIGURED\n${factions}\n\nSIMULATION PARAMETERS\n${params}\n\nMEASURED RESULT\n${result}\n\nInterpret this run.`
   }
 
+  /* Die Frist laeuft ab dem Eintreffen der Anfrage, nicht ab dem ersten
+     Modellaufruf: auch das Lesen des Bodys hat Zeit gekostet. */
+  const started = Date.now()
+  const left = () => BUDGET_MS - (Date.now() - started) - RESERVE_MS
+
   let last = ""
+  let ranOutOfTime = false
   for (const model of [MODEL, ...FALLBACK]) {
+    const budget = left()
+    if (budget < MIN_TRY_MS) {
+      // Lieber jetzt sauber antworten als in den Abbruch der Plattform laufen.
+      ranOutOfTime = true
+      break
+    }
     try {
       const r = await fetch(`${base}/v1/messages`, {
         method: "POST",
@@ -132,9 +163,16 @@ export default async (req: Request, _ctx: Context) => {
           model, max_tokens: 2000, temperature: 0.4,
           system, messages: [{ role: "user", content: user }],
         }),
-        signal: AbortSignal.timeout(22_000),
+        signal: AbortSignal.timeout(Math.min(ATTEMPT_MS, budget)),
       })
       if (!r.ok) { last = `${model}: HTTP ${r.status}`; continue }
+      // Ein Modell, das das Gateway nicht fuehrt, endet als HTML-Seite mit
+      // Status 200. Das hier zu erkennen ist billiger, als es als kaputtes
+      // JSON zu melden.
+      if (!(r.headers.get("content-type") || "").includes("json")) {
+        last = `${model}: the gateway answered with a page, not JSON — the model is probably not available there`
+        continue
+      }
       const data = await r.json()
       const finish = data?.stop_reason
       const text = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim()
@@ -146,8 +184,21 @@ export default async (req: Request, _ctx: Context) => {
       if (!parsed) { last = `${model}: answer was not valid JSON`; continue }
       return json({ ...parsed, model })
     } catch (e: any) {
-      last = `${model}: ${e?.message ?? e}`
+      // TimeoutError heisst: dieser Versuch lief in die Frist, nicht dass das
+      // Modell etwas Falsches gesagt haette.
+      const timedOut = e?.name === "TimeoutError"
+      if (timedOut) ranOutOfTime = true
+      last = timedOut ? `${model}: no answer within ${Math.round(Math.min(ATTEMPT_MS, budget) / 1000)}s` : `${model}: ${e?.message ?? e}`
     }
+  }
+
+  if (ranOutOfTime) {
+    return json({
+      error: "The model did not answer in time. This endpoint gives up before the platform cuts the " +
+             "connection, so you get this note instead of an empty 504. The run itself is unaffected — " +
+             "the simulation is already computed in your browser; only the wording of it is missing. " +
+             `Try again in a moment. Last attempt: ${last}`,
+    }, 504)
   }
   return json({ error: `No model in the chain answered. Last: ${last}` }, 502)
 }
